@@ -142,7 +142,8 @@ def fetch_configuration_and_status(client):
         patroni_log_content = fetch_latest_log_file(client, '/var/log/patroni', 'patroni*.log')
         etcd_log_content = fetch_latest_log_file(client, '/var/log/etcd', 'etcd*.log')
         postgres_log_content = fetch_latest_log_file(client, pg_log_dir, 'postgresql*.log')
-       
+        disk_usage, disk_usage_err = execute_command(client, 'df -h')
+        top_memory_processes, top_memory_processes_err = execute_command(client, 'ps aux --sort=-%mem | head -n 11')
         return {
             'cluster_hosts': cluster_hosts,
             'haproxy_conf': haproxy_conf,
@@ -161,6 +162,8 @@ def fetch_configuration_and_status(client):
             'patroni_log_content': patroni_log_content,
             'etcd_log_content':etcd_log_content,
             'postgres_log_content':postgres_log_content,
+            'disk_usage':disk_usage,
+            'top_memory_processes':top_memory_processes,
             'errors': {
                 'haproxy_err': haproxy_err,
                 'etcd_err': etcd_err,
@@ -171,7 +174,9 @@ def fetch_configuration_and_status(client):
                 'postgres_status_err': postgres_status_err,
                 'postgres_process_status_err': postgres_process_status_err,
                 'patronictl_status_err': patronictl_status_err,
-                'last_reboot_status_err':last_reboot_status_err 
+                'last_reboot_status_err':last_reboot_status_err,
+                'disk_usage_err':disk_usage_err,
+                'top_memory_processes_err':top_memory_processes_err
             }
         }
     except Exception as e:
@@ -271,6 +276,14 @@ def generate_html_report(results, output_file):
                 <span class="expandable">Node Last Reboot</span>
                 <div class="expandable-content"><pre>{result['last_reboot_status']}</pre></div>
             </div>
+            <div>
+                <span class="expandable">Total Disk Usage</span>
+                <div class="expandable-content"><pre>{result['disk_usage']}</pre></div>
+            </div>
+            <div>
+                <span class="expandable">Top Consumer Process</span>
+                <div class="expandable-content"><pre>{result['top_memory_processes']}</pre></div>
+            </div>
         </div>
         """
 
@@ -321,8 +334,19 @@ def generate_text_report(results, output_file):
         text_content += result['etcd_log_content'] + "\n"
         text_content += "PostgreSQL Log Content:\n"
         text_content += result['postgres_log_content'] + "\n"
-        text_content += "Errors:\n"
-        text_content += result['errors'] + "\n\n"
+        text_content += "Patroni Last Error:\n"
+        text_content += result['patroni_last_error'] + "\n"
+        text_content += "etcd Last Error:\n"
+        text_content += result['etcd_last_error'] +"\n"
+        text_content += "PostgreSQL Last Error:\n"
+        text_content += result['postgres_last_error'] +"\n"
+        text_content += "Node Last Reboot:\n"
+        text_content += result['last_reboot_status'] +"\n"
+        text_content += "Total Disk Usage:\n"
+        text_content += result['disk_usage'] +"\n"
+        text_content += "Top Consumer Process:\n"
+        text_content += result['top_memory_processes'] +"\n"
+        "\n\n"
 
     with open(output_file, 'w') as f:
         f.write(text_content)
@@ -375,7 +399,9 @@ def main():
             'patroni_last_error': config_data.get('patroni_last_error', 'No Patroni error found'),
             'etcd_last_error': config_data.get('etcd_last_error', 'No etcd error found'),
             'postgres_last_error': config_data.get('postgres_last_error', 'No PostgreSQL error found'),
-            'last_reboot_status': config_data.get('last_reboot_status', '')
+            'last_reboot_status': config_data.get('last_reboot_status', ''),
+            'disk_usage': config_data.get('disk_usage',''),
+            'top_memory_processes': config_data.get('top_memory_processes','')
         }
         results.append(result)
 
